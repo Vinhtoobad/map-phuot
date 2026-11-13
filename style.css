@@ -58,6 +58,7 @@ body.nav #toast{top:calc(var(--sat) + 116px)}
 #hud{left:12px;bottom:calc(var(--sab) + var(--dock) + 12px);width:68px;height:68px;border-radius:50%;
   background:var(--card);box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;
   border:3px solid var(--ink)}
+#hud.stale{opacity:.4}
 #hud b{font-size:24px;line-height:1;font-variant-numeric:tabular-nums}
 #hud small{font-size:10px;color:var(--muted);margin-top:1px}
 button:disabled{opacity:.45;pointer-events:none}
