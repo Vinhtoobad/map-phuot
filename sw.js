@@ -1,6 +1,6 @@
 // Service worker: cache app shell kiểu network-first.
 // Ko cache tile và API ở giai đoạn 1. NHỚ tăng tên cache khi sửa file.
-const CACHE = 'map-phuot-v6';
+const CACHE = 'map-phuot-v7';
 const SHELL = [
   './',
   'index.html',
