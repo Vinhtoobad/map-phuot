@@ -83,6 +83,7 @@ function renderSettings() {
     ? `Đang lưu ${police.length} điểm CSGT trong máy`
     : 'Chưa có điểm CSGT nào';
   $('btnClearPolice').disabled = !police.length;
+  showGpsInfo();
   disarmClear();
 }
 $('alertChoices').addEventListener('click', (e) => {
@@ -277,7 +278,17 @@ function onPosition(p) {
     }
   }
   lastFix = { p: pos, t: p.timestamp };
-  $('speed').textContent = Math.round(Math.max(0, v) * 3.6);
+  // Dưới 1.5 km/h coi là đứng yên: GPS đứng một chỗ vẫn "trôi" ra 1 đến 2 km/h
+  const kmh = Math.max(0, v) * 3.6;
+  $('speed').textContent = kmh < 1.5 ? 0 : Math.round(kmh);
+
+  // Số liệu đo thật của GPS máy này (hiện trong cài đặt)
+  const now = Date.now();
+  if (gps.lastAt) { gps.gaps.push(now - gps.lastAt); if (gps.gaps.length > 8) gps.gaps.shift(); }
+  gps.lastAt = now;
+  gps.acc = p.coords.accuracy;
+  gps.hasSpeed = speed != null && !Number.isNaN(speed);
+  $('hud').classList.remove('stale');
 
   // Mũi tên hướng đi, chỉ hiện khi đang chạy và máy có trả hướng
   const hasHd = v > 1.5 && heading != null && !Number.isNaN(heading);
@@ -292,6 +303,32 @@ function onPosition(p) {
   updateNavigation();
 }
 
+const gps = { lastAt: 0, gaps: [], acc: null, hasSpeed: false };
+
+function gpsInfoText() {
+  if (!gps.lastAt) return 'GPS: chưa có tín hiệu';
+  const parts = [];
+  if (gps.gaps.length) {
+    const avg = gps.gaps.reduce((a, b) => a + b, 0) / gps.gaps.length / 1000;
+    parts.push(`cập nhật mỗi ${avg.toFixed(1)} giây`);
+  }
+  if (gps.acc != null) parts.push(`sai số vị trí ±${Math.round(gps.acc)} m`);
+  parts.push(gps.hasSpeed ? 'tốc độ do GPS đo' : 'tốc độ tự tính từ quãng đường');
+  return `GPS: ${parts.join(' · ')}`;
+}
+
+// Quá 4 giây ko có tín hiệu mới thì làm mờ ô tốc độ: con số đang hiện là số cũ
+setInterval(() => {
+  if (gps.lastAt && Date.now() - gps.lastAt > 4000) $('hud').classList.add('stale');
+  if (!$('settings').hidden) showGpsInfo();
+}, 1000);
+
+// Có kiểm tra phần tử: trình duyệt có thể còn giữ index.html cũ trong vài phút sau khi cập nhật
+function showGpsInfo() {
+  const box = $('gpsInfo');
+  if (box) box.textContent = gpsInfoText();
+}
+
 function onPositionError(e) {
   const msg = e.code === 1 ? 'Chưa cấp quyền vị trí cho trang này'
     : e.code === 2 ? 'Ko lấy được vị trí GPS'
@@ -301,7 +338,7 @@ function onPositionError(e) {
 
 if ('geolocation' in navigator) {
   navigator.geolocation.watchPosition(onPosition, onPositionError, {
-    enableHighAccuracy: true, maximumAge: 1000, timeout: 20000,
+    enableHighAccuracy: true, maximumAge: 0, timeout: 20000, // maximumAge 0: ko nhận vị trí cũ đã lưu sẵn
   });
 } else {
   toast('Trình duyệt ko hỗ trợ định vị', 4000);
