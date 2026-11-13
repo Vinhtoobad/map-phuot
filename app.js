@@ -255,6 +255,11 @@ $('btnFollow').addEventListener('click', () => {
   setFollow(!follow);
 });
 map.on('dragstart', () => setFollow(false));
+// Lần cuối người dùng chạm/lăn chuột trên bản đồ, để việc bám theo ko giành điều khiển
+let lastTouchAt = 0;
+for (const ev of ['touchstart', 'touchmove', 'touchend', 'wheel', 'mousedown']) {
+  map.on(ev, () => { lastTouchAt = Date.now(); });
+}
 
 function onPosition(p) {
   const { longitude, latitude, speed, heading } = p.coords;
@@ -279,7 +284,10 @@ function onPosition(p) {
   meEl.classList.toggle('hd', hasHd);
   if (hasHd) meEl.style.setProperty('--hd', `${heading}deg`);
 
-  if (follow) map.easeTo({ center: pos, zoom: first ? 16 : map.getZoom(), duration: first ? 0 : 800 });
+  // Bám theo vị trí: chỉ dời tâm, KO đụng tới mức zoom, và nhường khi ngón tay đang thao tác.
+  // (Trước đây mỗi giây GPS lại ép zoom cũ nên trên điện thoại ko thu nhỏ bản đồ ra xa được.)
+  if (first) map.jumpTo({ center: pos, zoom: 16 });
+  else if (follow && Date.now() - lastTouchAt > 1500) map.easeTo({ center: pos, duration: 800 });
   checkAlerts();
   updateNavigation();
 }
@@ -480,6 +488,35 @@ function openPlace(lngLat, name, sub) {
   placeMarker.setLngLat(lngLat).addTo(map);
   closePopup();
   setMode('place');
+  if (!sub) lookupAddress(place, !name);
+}
+
+// Địa điểm có tên (trường, quán, cây xăng...) đang hiện trên bản đồ ngay dưới ngón tay
+function poiAt(point) {
+  if (!map.isStyleLoaded()) return null;
+  const box = [[point.x - 14, point.y - 14], [point.x + 14, point.y + 14]];
+  const f = map.queryRenderedFeatures(box).find((x) =>
+    x.sourceLayer === 'poi' && x.geometry.type === 'Point' && (x.properties['name:vi'] || x.properties.name));
+  return f ? { lngLat: f.geometry.coordinates.slice(0, 2), name: f.properties['name:vi'] || f.properties.name } : null;
+}
+
+// Hỏi Nominatim xem toạ độ này là chỗ nào (tên địa điểm, số nhà, tên đường)
+async function lookupAddress(p, needName) {
+  try {
+    const wait = lastSearchAt + 1100 - Date.now(); // chung hạn mức 1 yêu cầu/giây với ô tìm kiếm
+    lastSearchAt = Date.now() + Math.max(0, wait);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=vi&lat=${p.lngLat[1]}&lon=${p.lngLat[0]}`;
+    const d = await (await fetch(url)).json();
+    if (place !== p || mode !== 'place' || !d?.display_name) return;
+    const a = d.address || {};
+    const street = [a.house_number, a.road].filter(Boolean).join(' ');
+    if (needName) {
+      p.name = d.name || street || p.name;
+      $('placeName').textContent = p.name;
+    }
+    $('placeSub').textContent = d.display_name.split(', ').filter((s) => s !== p.name).slice(0, 5).join(', ');
+  } catch { /* mất mạng: giữ toạ độ */ }
 }
 $('btnGo').addEventListener('click', () => previewRoutes(place.lngLat, place.name));
 $('btnMarkHere').addEventListener('click', () => { addPolice(place.lngLat); setMode('idle'); });
@@ -494,10 +531,12 @@ map.on('touchstart', (e) => {
   if (e.points.length !== 1) return;
   pressStart = e.point;
   const lngLat = [e.lngLat.lng, e.lngLat.lat];
+  const point = e.point;
   pressTimer = setTimeout(() => {
     pressTimer = null;
     navigator.vibrate?.(30);
-    openPlace(lngLat);
+    const poi = poiAt(point);
+    if (poi) openPlace(poi.lngLat, poi.name); else openPlace(lngLat);
   }, LONG_PRESS_MS);
 });
 map.on('touchmove', (e) => {
@@ -510,11 +549,17 @@ map.on('touchcancel', cancelPress);
 map.on('contextmenu', (e) => {
   e.preventDefault?.();
   cancelPress();
-  openPlace([e.lngLat.lng, e.lngLat.lat]);
+  const poi = poiAt(e.point);
+  if (poi) openPlace(poi.lngLat, poi.name); else openPlace([e.lngLat.lng, e.lngLat.lat]);
 });
-map.on('click', () => {
+map.on('click', (e) => {
   $('results').hidden = true;
   closePopup();
+  // Chạm nhẹ vào một địa điểm có tên trên bản đồ thì mở luôn thẻ của nó
+  if (mode === 'idle' || mode === 'place') {
+    const poi = poiAt(e.point);
+    if (poi) openPlace(poi.lngLat, poi.name);
+  }
 });
 
 // ---------- Tìm địa điểm (Nominatim) ----------
