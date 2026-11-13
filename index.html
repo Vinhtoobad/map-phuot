@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Map Phượt">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+<title>Map Phượt</title>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- Tìm kiếm -->
+<div id="top">
+  <form id="searchForm" class="card" autocomplete="off">
+    <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" type="search" placeholder="Đi đâu đây fen?" enterkeyhint="search">
+    <button type="button" id="btnSettings" aria-label="Cài đặt">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+    </button>
+  </form>
+  <div id="results" class="card" hidden></div>
+</div>
+
+<!-- Bảng chỉ dẫn khi đang dẫn đường -->
+<div id="navBanner" hidden>
+  <svg id="navArrow" viewBox="0 0 24 24"><path d="M12 21V4M5 11l7-7 7 7"/></svg>
+  <div class="nav-txt">
+    <div id="navDist"></div>
+    <div id="navText"></div>
+  </div>
+</div>
+
+<!-- Cảnh báo CSGT -->
+<div id="alertBanner" hidden></div>
+<div id="toast" hidden></div>
+
+<!-- Nút nổi -->
+<div id="attrib">© OpenStreetMap · OpenFreeMap</div>
+<div id="hud"><b id="speed">0</b><small>km/h</small></div>
+<button id="btnFollow" class="fab" aria-label="Về vị trí của tui">
+  <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+</button>
+<button id="btnPolice" aria-label="Báo CSGT ở đây">
+  <svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.700-8-6-8-11V5l8-3z" fill="currentColor"/><path d="M12 7.500l1.300 2.700 3 .400-2.200 2.100.500 3L12 14.300l-2.600 1.400.500-3-2.200-2.100 3-.400z" fill="#ff7a1a"/></svg>
+  <span>CSGT</span>
+</button>
+<button id="btnTrip"><span id="tripLabel">Bắt đầu chuyến đi</span></button>
+
+<!-- Thẻ địa điểm -->
+<section id="placeSheet" class="sheet" hidden>
+  <button class="x" data-close aria-label="Đóng">✕</button>
+  <h2 id="placeName"></h2>
+  <p id="placeSub" class="sub"></p>
+  <div class="row">
+    <button id="btnGo" class="primary">Chỉ đường</button>
+    <button id="btnMarkHere" class="warn">Báo CSGT ở đây</button>
+  </div>
+</section>
+
+<!-- Chọn tuyến -->
+<section id="routeSheet" class="sheet" hidden>
+  <button class="x" data-close aria-label="Đóng">✕</button>
+  <p class="sub">Đến</p>
+  <h2 id="routeDest"></h2>
+  <div id="routeList"></div>
+  <p id="routeMore" class="sub more" hidden>Đang tìm thêm tuyến khác hẳn…</p>
+  <p id="routeWarn" class="warn-txt" hidden></p>
+  <button id="btnStartNav" class="go">Đi ngay</button>
+</section>
+
+<!-- Đang dẫn đường -->
+<section id="navSheet" class="sheet" hidden>
+  <div class="nav-info">
+    <div><b id="navEta"></b><small>đến nơi</small></div>
+    <div><b id="navMin"></b><small id="navMinUnit">phút</small></div>
+    <div><b id="navKm"></b><small id="navKmUnit">km</small></div>
+  </div>
+  <div class="row">
+    <button id="btnRoutes">Tuyến khác</button>
+    <button id="btnStopNav" class="danger">Dừng</button>
+  </div>
+</section>
+
+<!-- Cài đặt -->
+<section id="settings" class="sheet" hidden>
+  <button class="x" data-close aria-label="Đóng">✕</button>
+  <h2>Cài đặt</h2>
+  <p class="sub">Báo khi cách điểm CSGT</p>
+  <div id="alertChoices" class="seg">
+    <button data-m="300">300 m</button>
+    <button data-m="500">500 m</button>
+    <button data-m="1000">1 km</button>
+    <button data-m="2000">2 km</button>
+  </div>
+  <label class="toggle"><span>Giọng nói cảnh báo khi tới gần</span><input id="setSound" type="checkbox"></label>
+  <button id="btnTestVoice" class="wide">Nghe thử giọng cảnh báo</button>
+  <p class="sub" id="policeCount"></p>
+  <button id="btnClearPolice" class="danger wide">Xoá toàn bộ điểm CSGT</button>
+  <p class="note">Điểm CSGT lưu riêng trong máy này và ko tự xoá. Muốn xoá từng điểm thì chạm vào điểm đó trên bản đồ.</p>
+</section>
+
+<script>
+// Mở thẳng file (file://) thì trình duyệt chặn ES module nên app ko chạy: báo rõ thay vì để màn hình trống
+if (location.protocol === 'file:') {
+  var t = document.getElementById('toast');
+  t.hidden = false;
+  t.style.cssText = 'top:40%;background:#ef4444;font-size:16px;padding:16px;border-radius:14px';
+  t.textContent = 'App ko chạy được khi mở thẳng file index.html. Hãy bấm đúp file chay-thu.bat, hoặc mở qua link HTTPS sau khi host.';
+}
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
